@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ashwick-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: record
+      POSTGRES_PASSWORD: record
+      POSTGRES_DB: ashwick
+    ports:
+      - "5432:5432"
+    volumes:
+      - ashwick_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U record -d ashwick"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  ashwick_pgdata:

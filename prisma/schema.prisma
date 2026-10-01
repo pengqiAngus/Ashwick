@@ -1,0 +1,298 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PositionSide {
+  long
+  short
+}
+
+/// 收藏的 USDT 现货交易对、开仓方向、目标价格区间与备注（个人使用，全局单份数据）
+model Favorite {
+  id         String        @id @default(cuid())
+  /// 币安交易对，如 BTCUSDT
+  symbol     String        @unique
+  baseAsset  String
+  quoteAsset String
+  /// 开仓方向：long 开多，short 开空。null 表示尚未选择
+  side       PositionSide?
+  /// 目标价格下限，USDT 计价。与 targetHigh 同为 null 表示未设置区间
+  targetLow  Decimal?      @db.Decimal(38, 18)
+  /// 目标价格上限，USDT 计价
+  targetHigh Decimal?      @db.Decimal(38, 18)
+  /// 用户备注。null 表示未填写
+  note       String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  events     FavoriteEvent[]
+}
+
+/// 收藏卡片上的操作。取消收藏时一并删除。
+model FavoriteEvent {
+  id         String   @id @default(cuid())
+  favoriteId String
+  favorite   Favorite @relation(fields: [favoriteId], references: [id], onDelete: Cascade)
+  /// 给人看的一句话，如「开仓方向改为开多」
+  summary    String
+  createdAt  DateTime @default(now())
+
+  @@index([favoriteId, createdAt])
+}
+
+enum PositionStatus {
+  open
+  closed
+}
+
+/// 一笔模拟仓位。数量以币为准；部分平仓后 margin / baseQty 为剩余值。
+model Position {
+  id         String         @id @default(cuid())
+  symbol     String
+  baseAsset  String
+  quoteAsset String
+  /// 入场时从收藏卡片复制，之后收藏方向变化不影响这笔仓位
+  side       PositionSide
+  /// 剩余保证金，USDT
+  margin     Decimal        @db.Decimal(38, 18)
+  leverage   Int
+  entryPrice Decimal        @db.Decimal(38, 18)
+  /// 剩余持仓币数量
+  baseQty    Decimal        @db.Decimal(38, 18)
+  status     PositionStatus @default(open)
+  openedAt   DateTime       @default(now())
+  closedAt   DateTime?
+  closes     PositionClose[]
+
+  @@index([status, openedAt])
+}
+
+/// 一次平仓。部分平仓会有多条。
+model PositionClose {
+  id           String   @id @default(cuid())
+  positionId   String
+  position     Position @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  entryPrice   Decimal  @db.Decimal(38, 18)
+  closePrice   Decimal  @db.Decimal(38, 18)
+  closedBase   Decimal  @db.Decimal(38, 18)
+  closedMargin Decimal  @db.Decimal(38, 18)
+  realizedPnl  Decimal  @db.Decimal(38, 18)
+  /// 实际盈亏 / 释放保证金
+  roi          Decimal  @db.Decimal(38, 18)
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+/// 收藏页侧边栏的全局备注，不绑定交易对
+model Memo {
+  id        String   @id @default(cuid())
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
+/* ======================= Agent 聊天工作台 ======================= */
+
+enum MessageRole {
+  user
+  assistant
+  system
+}
+
+enum MessageStatus {
+  pending_run
+  running
+  complete
+  failed
+  cancelled
+}
+
+enum RunStatus {
+  queued
+  running
+  cancelling
+  completed
+  failed
+  cancelled
+}
+
+enum RunKind {
+  undetermined
+  full_analysis
+  followup_explain
+  hypothetical
+  refresh
+  change_horizon
+  switch_symbol
+  clarify
+}
+
+enum StepStatus {
+  pending
+  running
+  completed
+  failed
+  skipped
+  cancelled
+}
+
+enum PredictionStatus {
+  unavailable
+  not_configured
+  insufficient_data
+  ok
+}
+
+enum LaunchSource {
+  favorite_card
+  manual
+}
+
+/// 一次 Agent 会话；个人使用，无用户维度
+model Conversation {
+  id               String       @id @default(cuid())
+  title            String?
+  source           LaunchSource @default(manual)
+  /// 当前分析上下文（由最近一次成功运行更新）
+  currentSymbol    String?
+  currentIntervals String[]     @default([])
+  currentHorizon   String?
+  /// 当前报告指针
+  currentReportId  String?      @unique
+  currentReport    AnalysisReport? @relation("CurrentReport", fields: [currentReportId], references: [id], onDelete: SetNull)
+  /// 单活跃运行租约：非空表示恰有一个未终结的运行
+  activeRunId      String?      @unique
+  /// 原子分配消息 ordinal
+  messageCount     Int          @default(0)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  messages Message[]
+  runs     AnalysisRun[]
+  reports  AnalysisReport[] @relation("ConversationReports")
+
+  @@index([updatedAt])
+}
+
+/// 聊天消息；parts 为完整的 AI SDK UIMessage parts
+model Message {
+  id               String        @id @default(cuid())
+  conversationId   String
+  conversation     Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role             MessageRole
+  ordinal          Int
+  parts            Json
+  metadata         Json?
+  status           MessageStatus @default(complete)
+  /// 收藏卡片 / 空白页首条消息的幂等键
+  launchId         String?       @unique
+  /// 手动输入消息的客户端 id（AI SDK 生成），用于重复提交去重
+  clientMessageId  String?
+  /// assistant 消息回答的用户消息；重试复用同一条 assistant 消息
+  replyToMessageId String?       @unique
+  /// 用户消息当前对应的运行
+  currentRunId     String?
+  attemptCount     Int           @default(0)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  runs AnalysisRun[]
+
+  @@unique([conversationId, ordinal])
+  @@unique([conversationId, clientMessageId])
+}
+
+/// 一次分析运行（对应一条触发消息的一次尝试）
+model AnalysisRun {
+  /// 应用侧生成，claim 事务内先写入 Conversation.activeRunId
+  id                 String      @id
+  conversationId     String
+  conversation       Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  messageId          String
+  message            Message     @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  attempt            Int
+  assistantMessageId String?
+  idempotencyKey     String      @unique
+  status             RunStatus   @default(queued)
+  kind               RunKind     @default(undetermined)
+  config             Json
+  snapshot           Json?
+  model              Json?
+  error              Json?
+  heartbeatAt        DateTime?
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  createdAt          DateTime    @default(now())
+
+  steps  AnalysisStep[]
+  report AnalysisReport?
+
+  @@unique([messageId, attempt])
+  @@index([conversationId, createdAt])
+  @@index([status, heartbeatAt])
+}
+
+model AnalysisStep {
+  id          String     @id @default(cuid())
+  runId       String
+  run         AnalysisRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  stepId      String
+  order       Int
+  name        String
+  status      StepStatus @default(pending)
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  durationMs  Int?
+  summary     String?
+  result      Json?
+  error       Json?
+  evidenceIds String[]   @default([])
+
+  @@unique([runId, stepId])
+}
+
+model AnalysisReport {
+  id               String           @id @default(cuid())
+  runId            String           @unique
+  run              AnalysisRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  conversationId   String
+  conversation     Conversation     @relation("ConversationReports", fields: [conversationId], references: [id], onDelete: Cascade)
+  symbol           String
+  intervals        String[]
+  horizon          String
+  snapshotId       String
+  dataCutoff       DateTime
+  report           Json
+  predictionStatus PredictionStatus @default(unavailable)
+  modelVersion     String?
+  schemaVersion    Int              @default(1)
+  createdAt        DateTime         @default(now())
+
+  currentOf Conversation? @relation("CurrentReport")
+
+  @@index([conversationId, createdAt])
+}
+
+/// 个人 Agent 配置。字段为 null 时回退到环境变量。全局仅一行，id 固定为 default。
+model AgentSetting {
+  id                        String   @id @default("default")
+  providerName              String?
+  providerBaseUrl           String?
+  providerApiKey            String?
+  modelAnalyst              String?
+  modelSynth                String?
+  supportsStructuredOutputs Boolean?
+  maxRunMs                  Int?
+  maxModelCalls             Int?
+  debateRounds              Int?
+  maxInputChars             Int?
+  riskMode                  String?
+  updatedAt                 DateTime @updatedAt
+}

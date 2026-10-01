@@ -1,26 +1,190 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+/* Streamdown（AI 消息 Markdown 渲染）自带的 Tailwind 类需要被扫描 */
+@source "../../node_modules/streamdown/dist/*.js";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-heading: var(--font-sans);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-primary-soft: var(--primary-soft);
+  --color-chart-crosshair: var(--chart-crosshair);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-up: var(--up);
+  --color-down: var(--down);
+  --color-hit: var(--hit);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --shadow-panel: var(--shadow-panel);
+  --shadow-glow: var(--shadow-glow);
+  --animate-meteor: meteor 5s linear infinite;
+  @keyframes meteor {
+  0% {
+    transform: rotate(var(--angle)) translateX(250px);
+    opacity: 0;
+    }
+  15% {
+    opacity: 1;
+    }
+  85% {
+    opacity: 1;
+    }
+  100% {
+    transform: rotate(var(--angle)) translateX(-250px);
+    opacity: 0;
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/*
+ * 黑白灰。深色里白是强调色。
+ * .light 以纯白为底，表面按深色相对背景的台阶反过来（卡片比白底略暗）。
+ * 涨跌（--up / --down）和危险色（--destructive）不跟强调色走。
+ */
+:root,
+.dark {
+  --background: oklch(0.155 0 0);
+  --foreground: oklch(0.94 0 0);
+  --card: oklch(0.195 0 0);
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.21 0 0);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.96 0 0);
+  --primary-soft: oklch(1 0 0 / 14%);
+  --primary-ring: oklch(1 0 0 / 28%);
+  --primary-glow: oklch(1 0 0 / 22%);
+  --primary-foreground: oklch(0.16 0 0);
+  --secondary: oklch(0.25 0 0);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.245 0 0);
+  --muted-foreground: oklch(0.66 0 0);
+  --accent: oklch(0.25 0 0);
+  --chart-crosshair: oklch(1 0 0 / 55%);
+  --accent-foreground: var(--foreground);
+  --destructive: oklch(0.68 0.16 22);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: var(--primary);
+  --up: oklch(0.76 0.12 162);
+  --down: oklch(0.7 0.16 22);
+  --hit: var(--primary);
+  --radius: 0.75rem;
+  --shadow-panel: 0 1px 0 oklch(1 0 0 / 3%) inset, 0 8px 24px -12px oklch(0 0 0 / 60%);
+  --shadow-glow: 0 0 0 1px var(--primary-ring), 0 12px 40px -12px var(--primary-glow);
+  --dur-fast: 150ms;
+  --dur: 200ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  color-scheme: dark;
+}
+
+/* 白色。共享的涨跌色、危险色、圆角留在 :root。 */
+.light {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.155 0 0);
+  --card: oklch(1 0 0);
+  --popover: oklch(1 0 0);
+  --primary: oklch(0.155 0 0);
+  --primary-soft: oklch(0 0 0 / 5%);
+  --primary-ring: oklch(0 0 0 / 18%);
+  --primary-glow: oklch(0 0 0 / 8%);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.96 0 0);
+  --muted: oklch(0.96 0 0);
+  --muted-foreground: oklch(0.45 0 0);
+  --accent: oklch(0.96 0 0);
+  --chart-crosshair: oklch(0 0 0 / 55%);
+  --border: oklch(0 0 0 / 8%);
+  --input: oklch(0 0 0 / 12%);
+  --shadow-panel: 0 1px 0 oklch(0 0 0 / 4%) inset, 0 8px 24px -16px oklch(0 0 0 / 16%);
+  color-scheme: light;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  a[href],
+  button:not(:disabled),
+  summary,
+  select:not(:disabled),
+  label,
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]),
+  [role="option"]:not([data-disabled]),
+  [role="menuitem"]:not([data-disabled]),
+  [role="switch"],
+  [role="checkbox"],
+  [role="radio"],
+  [role="link"] {
+    cursor: pointer;
+  }
+  input:not([type="button"], [type="submit"], [type="reset"], [type="checkbox"], [type="radio"], [type="file"], [type="range"], :disabled),
+  textarea:not(:disabled) {
+    cursor: text;
+  }
+  button:disabled,
+  input:disabled,
+  select:disabled,
+  textarea:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+  html {
+    @apply font-sans;
+    background: var(--background);
+  }
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  ::selection {
+    background: var(--primary-glow);
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Agent 上下文面板中的迷你实时图表：覆盖 CandleChart 的默认高度 */
+.agent-mini-chart > div {
+  height: 14rem;
+}
+
+/* 尊重系统“减少动态效果”设置：过渡与动画归零 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
