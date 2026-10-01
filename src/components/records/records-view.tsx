@@ -2,13 +2,17 @@
 
 import { useId, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { CalendarIcon } from "lucide-react";
 import { LayoutGroup, motion } from "motion/react";
+import { type DateRange } from "react-day-picker";
+import { zhCN } from "react-day-picker/locale";
 import { toast } from "sonner";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
-import { Input } from "@/components/ui/input";
 import { apiFetch, errorMessage } from "@/lib/client-api";
 import { Decimal } from "@/lib/decimal";
 import {
@@ -18,6 +22,7 @@ import {
   matchingWindow,
   pnlByToken,
   rangeForWindow,
+  shanghaiDay,
   summarizeCloses,
   type CloseRange,
   type CloseSummary,
@@ -130,18 +135,76 @@ function DateRangeBar({
   return (
     <div className="flex flex-wrap items-center gap-3">
       <Segmented label="统计区间" value={preset} options={STAT_WINDOWS} onChange={(id) => onChange(rangeForWindow(id, now))} />
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <label className="flex items-center gap-2">
-          从
-          <Input type="date" value={range.start ?? ""} onChange={(event) => onChange({ ...range, start: event.target.value || null })} className="w-36" />
-        </label>
-        <label className="flex items-center gap-2">
-          到
-          <Input type="date" value={range.end ?? ""} onChange={(event) => onChange({ ...range, end: event.target.value || null })} className="w-36" />
-        </label>
-      </div>
+      <DateRangeField range={range} onChange={onChange} />
     </div>
   );
+}
+
+function DateRangeField({ range, onChange }: { range: CloseRange; onChange: (range: CloseRange) => void }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<DateRange | undefined>();
+  const selected = toDateRange(range);
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (next) setDraft(selected);
+      }}
+    >
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            variant="outline"
+            data-empty={!range.start && !range.end}
+            className="justify-start font-normal data-[empty=true]:text-muted-foreground"
+          />
+        }
+      >
+        <CalendarIcon data-icon="inline-start" />
+        {rangeText(range)}
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          key={String(open)}
+          mode="range"
+          numberOfMonths={2}
+          resetOnSelect
+          locale={zhCN}
+          timeZone="Asia/Shanghai"
+          noonSafe
+          selected={draft}
+          defaultMonth={draft?.from ?? draft?.to}
+          onSelect={(next) => {
+            setDraft(next);
+            if (!next?.from || !next.to) return;
+            onChange({ start: shanghaiDay(next.from.getTime()), end: shanghaiDay(next.to.getTime()) });
+            setOpen(false);
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function toDateRange(range: CloseRange): DateRange | undefined {
+  if (!range.start && !range.end) return undefined;
+  return {
+    from: range.start ? shanghaiNoon(range.start) : undefined,
+    to: range.end ? shanghaiNoon(range.end) : undefined,
+  };
+}
+
+function shanghaiNoon(iso: string): Date {
+  return new Date(`${iso}T12:00:00+08:00`);
+}
+
+function rangeText(range: CloseRange): string {
+  if (range.start && range.end) return `${range.start} – ${range.end}`;
+  if (range.start) return `${range.start} –`;
+  if (range.end) return `– ${range.end}`;
+  return "不限";
 }
 
 function WindowsPanel({ closes }: { closes: PositionCloseDto[] }) {

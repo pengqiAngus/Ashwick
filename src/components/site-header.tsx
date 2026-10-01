@@ -41,7 +41,7 @@ export function SiteHeader() {
           <ThemeMenu />
         </div>
       </div>
-      <header className="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
+      <header className="pointer-events-none fixed bottom-4 z-40 max-md:right-4 md:inset-x-0 md:flex md:justify-center md:px-4">
         <div className="pointer-events-auto">
           <FloatingDock items={items} />
         </div>

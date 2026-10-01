@@ -111,7 +111,7 @@ export function SymbolSearch({
   const activeId = activeIndex >= 0 && search.results[activeIndex] ? `${listId}-${search.results[activeIndex].symbol}` : undefined;
 
   return (
-    <div ref={rootRef} className={cn("relative w-[560px]", className)}>
+    <div ref={rootRef} className={cn("relative w-full sm:w-[560px]", className)}>
       {/* 静态柔和光晕：焦点时略增强（仅首页） */}
       {!compact && (
       <div
