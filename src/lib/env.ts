@@ -19,6 +19,10 @@ export const serverEnv = {
   get symbolsCacheTtlMs(): number {
     return toInt(process.env.SYMBOLS_CACHE_TTL_MS, 3_600_000, 60_000);
   },
+  /** Worker 价格报价允许的最大年龄，超过后不触发提醒。 */
+  get alertQuoteStaleMs(): number {
+    return toInt(process.env.ALERT_QUOTE_STALE_MS, 30_000, 5_000);
+  },
   /** 单次请求币安接口的超时时间 */
   binanceTimeoutMs: 8_000,
 

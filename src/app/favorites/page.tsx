@@ -3,6 +3,7 @@ import { SparklesIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FavoritesGrid } from "@/components/favorites/favorites-grid";
 import { MemoSidebar } from "@/components/favorites/memo-sidebar";
+import { NotificationStatus } from "@/components/favorites/notification-status";
 import { getSymbolTable } from "@/lib/binance/symbols";
 import { listFavorites } from "@/lib/favorites";
 import { listMemos } from "@/lib/memos";
@@ -60,6 +61,7 @@ export default async function FavoritesPage() {
           </Button>
         </div>
       </header>
+      <NotificationStatus />
       <FavoritesGrid initialFavorites={favorites} symbolInfos={symbolInfos} loadError={loadError} />
     </div>
   );

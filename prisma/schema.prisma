@@ -12,6 +12,18 @@ enum PositionSide {
   short
 }
 
+enum NotificationChannel {
+  sms
+  email
+}
+
+enum NotificationDeliveryStatus {
+  pending
+  sending
+  sent
+  failed
+}
+
 /// 收藏的 USDT 现货交易对、开仓方向、目标价格区间与备注（个人使用，全局单份数据）
 model Favorite {
   id         String        @id @default(cuid())
@@ -29,7 +41,9 @@ model Favorite {
   note       String?
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
-  events     FavoriteEvent[]
+  events        FavoriteEvent[]
+  alertState    FavoriteAlertState?
+  alertTriggers PriceAlertTrigger[]
 }
 
 /// 收藏卡片上的操作。取消收藏时一并删除。
@@ -42,6 +56,65 @@ model FavoriteEvent {
   createdAt  DateTime @default(now())
 
   @@index([favoriteId, createdAt])
+}
+
+/// 目标区间的边沿状态；用于保证每次重新进入区间只触发一次。
+model FavoriteAlertState {
+  id            String   @id @default(cuid())
+  favoriteId    String   @unique
+  favorite      Favorite @relation(fields: [favoriteId], references: [id], onDelete: Cascade)
+  rangeKey      String
+  inRange       Boolean  @default(false)
+  lastPrice     Decimal? @db.Decimal(38, 18)
+  lastCheckedAt DateTime?
+  lastEnteredAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+/// 一次从目标区间外进入区间的触发事件。
+model PriceAlertTrigger {
+  id          String   @id @default(cuid())
+  favoriteId  String
+  favorite    Favorite @relation(fields: [favoriteId], references: [id], onDelete: Cascade)
+  rangeKey    String
+  targetLow   Decimal  @db.Decimal(38, 18)
+  targetHigh  Decimal  @db.Decimal(38, 18)
+  price       Decimal  @db.Decimal(38, 18)
+  triggeredAt DateTime @default(now())
+  deliveries  NotificationDelivery[]
+
+  @@index([favoriteId, triggeredAt])
+}
+
+/// 某次触发在单个通知渠道上的投递任务。
+model NotificationDelivery {
+  id                String                     @id @default(cuid())
+  triggerId         String
+  trigger           PriceAlertTrigger         @relation(fields: [triggerId], references: [id], onDelete: Cascade)
+  channel           NotificationChannel
+  status            NotificationDeliveryStatus @default(pending)
+  attempts          Int                       @default(0)
+  nextAttemptAt     DateTime                  @default(now())
+  claimedAt         DateTime?
+  providerMessageId String?
+  lastError         String?
+  sentAt            DateTime?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  @@unique([triggerId, channel])
+  @@index([status, nextAttemptAt])
+}
+
+/// Worker 最近一次心跳与检查结果；单用户应用固定使用 default 行。
+model NotificationWorkerHeartbeat {
+  id            String   @id @default("default")
+  lastSeenAt    DateTime
+  lastCheckAt   DateTime?
+  lastSuccessAt DateTime?
+  lastError     String?
+  updatedAt     DateTime @updatedAt
 }
 
 enum PositionStatus {

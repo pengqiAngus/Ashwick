@@ -83,6 +83,43 @@ pnpm start
 - 请求不重叠；遇 429/418 会读取 `Retry-After` 并在本进程内暂停请求币安，前端按提示延后重试，不做无限重试。
 - 所有错误（限流、超时、451、无效交易对、数据库未启动）均以统一 JSON 返回并在界面上以中文提示。
 
+## 价格通知（Railway Worker）
+
+收藏卡片保存目标价格区间后，可以通过独立的 Railway Notification Worker 接收短信和邮件提醒。Worker 每 10 秒读取目标区间收藏并调用币安公开行情；价格从区间外进入 `下限 ≤ 价格 ≤ 上限` 时触发一次通知。价格持续在区间内不会重复发送，离开后再次进入才会重新提醒。通知不依赖浏览器页面保持打开。
+
+通知记录、渠道状态和失败重试保存在 PostgreSQL。短信和邮件任务分别重试，单个渠道失败不会阻塞另一个渠道。Worker 使用 PostgreSQL advisory lock，误部署多个副本时只允许一个实例执行检查。
+
+### Railway 部署
+
+Web Service 保持现有命令：
+
+```bash
+pnpm build
+pnpm start
+```
+
+从同一仓库新增一个 Railway Service，使用相同的 `DATABASE_URL`，启动命令设置为：
+
+```bash
+pnpm monitor:notifications
+```
+
+Worker 的独立服务代码位于仓库根目录的 `worker/`，与 Next.js 的 `src/` 平级。`worker/notifications.ts` 是常驻入口；`worker/notifications/` 保存配置、行情触发、短信、邮件、状态和重试逻辑。它通过 `src/lib/` 中的数据库、币安客户端和格式化工具复用业务基础设施，但不会依赖 Next.js 页面进程。
+
+数据库迁移完成后，Worker 会在启动时立即检查，之后每 10 秒检查。Worker 副本数保持为 1。可以在 Railway Shell 中运行 `pnpm notifications:test` 测试已经配置的短信和邮件渠道。
+
+### 通知环境变量
+
+Web Service 和 Worker 都需要复制 `.env.example` 中的通知变量。密钥只放 Railway Variables，不写入数据库：
+
+- `ALERT_CHANNELS`：`sms,email`、`sms` 或 `email`。
+- `ALERT_APP_URL`：用于邮件中的收藏页链接。
+- `ALERT_SMS_ENABLED`、`ALERT_SMS_PHONE`：中国大陆手机号必须使用 `+86` 格式。
+- `TENCENTCLOUD_SECRET_ID`、`TENCENTCLOUD_SECRET_KEY`、`TENCENT_SMS_SDK_APP_ID`、`TENCENT_SMS_SIGN_NAME`、`TENCENT_SMS_TEMPLATE_ID`、`TENCENT_SMS_REGION`：腾讯云短信配置。
+- `ALERT_EMAIL_ENABLED`、`SMTP_HOST`、`SMTP_PORT`、`SMTP_SECURE`、`SMTP_USER`、`SMTP_PASS`、`ALERT_EMAIL_FROM`、`ALERT_EMAIL_TO`：Gmail 或 163 SMTP 配置。
+
+Gmail 使用开启两步验证后生成的应用专用密码；163 使用 SMTP 授权码，不使用网页登录密码。腾讯云短信需要先审核签名和模板，模板参数依次为交易对、价格、目标区间、触发时间。收藏页的“价格通知”状态卡片会显示渠道是否完整、Worker 最近心跳和失败任务数量，不会显示密钥。
+
 ## Agent 聊天工作台
 
 ### 能力范围（已实现）
@@ -137,7 +174,7 @@ pnpm build
 - **市值**：币安现货接口不提供，需要额外数据源（如 CoinGecko）及 baseAsset → 数据源 ID 的映射；本版不展示。
 - **多用户 / 登录**：当前为个人使用，收藏与目标区间为全局单份数据。若需多用户，需引入认证并按用户隔离数据。
 - **部署地区可用性**：币安接口在部分地区不可访问，需在实际部署环境验证。
-- **通知 / 历史触达记录**：本版仅显示“当前是否处于区间”。
+- **通知 / 历史触达记录**：已支持 Railway Worker 价格触发、腾讯云短信、Gmail/163 SMTP、独立渠道重试与触达记录。
 - **量化预测模型（阶段 4）**：方向分类 / 收益率回归 baseline、时间序列训练与样本外评估、概率校准、历史回放，尚未实现；当前所有预测字段为不可用状态。
 
 ## 版权
