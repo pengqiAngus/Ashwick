@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { lookup } from "node:dns/promises";
 import nodemailer from "nodemailer";
 import type { EmailNotificationConfig, SmsNotificationConfig } from "@worker/notifications/config";
 
@@ -69,10 +70,12 @@ export async function sendSms(config: SmsNotificationConfig, params: string[]): 
 }
 
 export async function sendEmail(config: EmailNotificationConfig, subject: string, text: string): Promise<ProviderResult> {
+  const { address } = await lookup(config.host, { family: 4 });
   const transport = nodemailer.createTransport({
-    host: config.host,
+    host: address,
     port: config.port,
     secure: config.secure,
+    tls: { servername: config.host },
     auth: { user: config.user, pass: config.pass },
   });
   try {
